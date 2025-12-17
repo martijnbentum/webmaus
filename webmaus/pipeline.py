@@ -49,22 +49,18 @@ class Pipeline:
             audio_filename = entry['audio_filename']
             text_filename = entry['text_filename']
 
-            output_file = make_output_filename(
-                self.output_directory,
-                audio_filename,
-                self.output_format,
-            )
+            output_file = make_output_filename(self.output_directory,
+                audio_filename, self.output_format)
 
             if Path(output_file).exists():
                 self.skipped.append(audio_filename)
                 continue
 
-            self._throttle()
+            ok = self._throttle()
+            if not ok: break
 
-            thread = threading.Thread(
-                target=self._run_single,
-                args=(audio_filename, text_filename),
-            )
+            thread = threading.Thread(target=self._run_single,
+                args=(audio_filename, text_filename))
             thread.start()
             self.executors.append(thread)
 
@@ -89,15 +85,30 @@ class Pipeline:
         if response is None:
             self.errors.append(audio_filename)
             return
-
-        if response.success:
-            self.done.append(audio_filename)
-        else:
+        if not response.success:
             self.errors.append(audio_filename)
+            return
+
+        response.save_alignment(output_directory = self.output_directory)
+        self.done.append([audio_filename, response.output_filename])
 
     def _throttle(self):
         self.executors = [e for e in self.executors if e.is_alive()]
+        self.start = time.time()
+        do_restart = False
         while len(self.executors) > 6:
             time.sleep(1)
             self.executors = [e for e in self.executors if e.is_alive()]
+            if time.time() - self.start > 1200:
+                print("Timeout waiting for threads to complete.")
+                do_restart = True
+                break
+        if do_restart:
+            print("Restarting thread pool...")
+            self.executors = []
+            time.sleep(3)
+            self.run()
+            return False
+        return True
+            
 
