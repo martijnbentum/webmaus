@@ -9,5 +9,6 @@ dependencies = [
     'requests',
     'lxml',
     'progressbar2',
+    'soundfile',
 ]
 
