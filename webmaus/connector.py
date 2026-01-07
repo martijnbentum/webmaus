@@ -1,3 +1,4 @@
+from . import audio
 import requests
 from pathlib import Path
 from lxml import etree
@@ -76,22 +77,29 @@ class Response:
         self.save_output(output, filename)
 
 
-def run_pipeline(audio_filename, text_filename, language, 
-    output_format = 'TextGrid', pipe = 'G2P_MAUS_PHO2SYL', preseg = 'true',
-    output_symbol = 'ipa'):
+def run_pipeline(audio_filename, text_filename, language, start_time=None,
+    end_time=None, output_format = 'TextGrid', pipe = 'G2P_MAUS_PHO2SYL', 
+    preseg = 'true', output_symbol = 'ipa'):
     ''' Run the forced alignment pipeline via the webmaus API.
     audio_filename:     path to the audio file
     text_filename:      path to the text file
     language:          language code for the input files
+    start_time:        start time in seconds (optional)
+    end_time:          end time in seconds (optional)
     output_format:     desired output format (default: 'TextGrid')
     pipe:              processing pipeline to use 
                        (default: 'G2P_MAUS_PHO2SYL')
     preseg:            whether to use pre-segmentation (default: 'true')
+    output_symbol:     output symbol set: 'sampa', 'ipa', 'manner', 'place'
     '''
     if not output_symbol in ['sampa', 'ipa', 'manner', 'place']:
         raise ValueError('output_symbol must be one of: '
             "'x-sampa', 'ipa', 'manner', 'place'")
-    files = {'SIGNAL': open(audio_filename, 'rb'),
+    if start_time is None and end_time is None:
+        signal = open(audio_filename, 'rb')
+    else: signal = audio.load_partial_audio_in_bytes_buffer(
+        audio_filename, start_time, end_time, format='WAV')
+    files = {'SIGNAL': signal,
         'TEXT': open(text_filename, 'rb') }
     data = {'LANGUAGE': language, 'OUTFORMAT': output_format, 'PIPE': pipe,
         'PRESEG': preseg, 'OUTSYMBOL': output_symbol}
@@ -103,23 +111,37 @@ def run_pipeline(audio_filename, text_filename, language,
     _close_files(files)
     return Response(response)
 
-def run_g2p_maus_phon2syl(audio_filename, text_filename, language,
-    output_format='TextGrid', preseg='true'):
+def run_g2p_maus_phon2syl(audio_filename, text_filename, language, 
+    start_time = None, end_time = None, output_format='TextGrid', preseg='true'):
     ''' Run the G2P_MAUS_PHO2SYL pipeline via the webmaus API.
     audio_filename:     path to the audio file
     text_filename:      path to the text file
     language:          language code for the input files
+    start_time:        start time in seconds (optional)
+    end_time:          end time in seconds (optional)
     output_format:     desired output format (default: 'TextGrid')
     preseg:            whether to use pre-segmentation (default: 'true')
     '''
-    return run_pipeline(audio_filename, text_filename, language,
-        output_format, pipe='G2P_MAUS_PHO2SYL', preseg=preseg)
+    return run_pipeline(audio_filename, text_filename, language, start_time,
+         end_time, output_format, pipe='G2P_MAUS_PHO2SYL', preseg=preseg)
 
 
-def make_output_filename(output_directory, audio_filename, output_format):
+def make_output_filename(output_directory, audio_filename, output_format,
+    start_time=None, end_time=None):
     ''' Create the output filename based on the audio filename and output format.
     '''
     stem = Path(audio_filename).stem
+    if start_time is None and end_time is None: pass
+    else:
+        if start_time is not None:
+            stem += f'_s-{int(start_time*1000)}'
+            if end_time is not None:
+                stem += f'-'
+        if end_time is not None:
+            if start_time is None:
+                stem += '_'
+            stem += f'e-{int(end_time*1000)}'
+        stem += '-ms'
     return str(Path(output_directory) / f'{stem}.{output_format}')
 
 def _close_files(files):
@@ -143,7 +165,8 @@ def _handle_pipeline_run(args):
         print('output exists error')
         return 
     response = run_pipeline(args.audio_filename, args.text_filename,
-        args.language, args.output_format, args.pipe, args.preseg)
+        args.language, args.start_time, args.end_time, args.output_format, 
+        args.pipe, args.preseg)
     if response != None and response.success: 
         output = response.download()
         if output:
@@ -159,6 +182,10 @@ def _main():
     parser.add_argument('text_filename', help='path to text file')
     parser.add_argument('output_directory', help='directory to save output')
     parser.add_argument('language', help='language code')
+    parser.add_argument('--start_time', type=float, help='start time in seconds',
+        default=None)
+    parser.add_argument('--end_time', type=float, help='end time in seconds',
+        default=None)
     parser.add_argument('--output_format', help='output format', 
         default='TextGrid')
     parser.add_argument('--pipe', help='pipeline', 

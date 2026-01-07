@@ -48,9 +48,11 @@ class Pipeline:
         for entry in progressbar(self.files):
             audio_filename = entry['audio_filename']
             text_filename = entry['text_filename']
+            start_time = entry.get('start_time', None)
+            end_time = entry.get('end_time', None)
 
             output_file = make_output_filename(self.output_directory,
-                audio_filename, self.output_format)
+                audio_filename, self.output_format, start_time, end_time)
 
             if Path(output_file).exists():
                 self.skipped.append(audio_filename)
@@ -60,13 +62,13 @@ class Pipeline:
             if not ok: break
 
             thread = threading.Thread(target=self._run_single,
-                args=(audio_filename, text_filename))
+                args=(audio_filename, text_filename, start_time, end_time))
             thread.start()
             self.executors.append(thread)
 
             time.sleep(self.wait_time)
 
-    def _run_single(self, audio_filename, text_filename):
+    def _run_single(self, audio_filename, text_filename, start_time, end_time):
         language = self.language
 
         if self.language_dict:
@@ -76,6 +78,8 @@ class Pipeline:
         response = run_pipeline(
             audio_filename=audio_filename,
             text_filename=text_filename,
+            start_time=start_time,
+            end_time=end_time,
             language=language,
             output_format=self.output_format,
             pipe=self.pipe,
