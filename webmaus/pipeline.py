@@ -87,6 +87,26 @@ class Pipeline:
         m += f'Errors: {len(self.errors)}'
         m += f'\nFiles can be found in : {self.output_directory}'
         print(m)
+        self._make_infos()
+
+    def _make_infos(self):
+        infos = []
+        for name in ['skipped', 'done', 'errors']:
+            items = getattr(self, name)
+            for line in items:
+                if name == 'errors':
+                    audio_filename, start_time, end_time = line
+                    output_file = None
+                else:
+                    audio_filename, start_time, end_time, output_file = line
+                infos.append({
+                    'audio_filename': audio_filename,
+                    'start_time': start_time,
+                    'end_time': end_time,
+                    'output_file': output_file,
+                    'status': name,
+                })
+        self.infos = infos 
 
     def _run_single(self, audio_filename, text_filename, start_time = None, 
         end_time = None, text=None):
@@ -113,10 +133,10 @@ class Pipeline:
         )
 
         if response is None:
-            self.errors.append(audio_filename)
+            self.errors.append((audio_filename, start_time, end_time))
             return
         if not response.success:
-            self.errors.append(audio_filename)
+            self.errors.append((audio_filename, start_time, end_time))
             return
 
         f = response.save_alignment(output_directory = self.output_directory,
