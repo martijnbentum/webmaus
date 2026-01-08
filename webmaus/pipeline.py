@@ -57,7 +57,8 @@ class Pipeline:
                 audio_filename, self.output_format, start_time, end_time)
 
             if Path(output_file).exists() and not self.overwrite:
-                self.skipped.append((audio_filename, start_time, end_time))
+                self.skipped.append((audio_filename, start_time, end_time,
+                    str(output_file)))
                 continue
 
             ok = self._throttle()
@@ -121,7 +122,7 @@ class Pipeline:
         f = response.save_alignment(output_directory = self.output_directory,
             audio_filename = audio_filename, start_time = start_time,
             end_time = end_time)
-        self.done.append([audio_filename, f])
+        self.done.append((audio_filename, start_time, end_time, f))
 
     def _throttle(self):
         '''Throttle the number of concurrent threads to avoid overloading 
