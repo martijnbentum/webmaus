@@ -118,10 +118,10 @@ class Pipeline:
             self.errors.append(audio_filename)
             return
 
-        response.save_alignment(output_directory = self.output_directory,
+        f = response.save_alignment(output_directory = self.output_directory,
             audio_filename = audio_filename, start_time = start_time,
             end_time = end_time)
-        self.done.append([audio_filename, response.output_filename])
+        self.done.append([audio_filename, f])
 
     def _throttle(self):
         '''Throttle the number of concurrent threads to avoid overloading 

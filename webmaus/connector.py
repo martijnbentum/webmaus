@@ -77,6 +77,7 @@ class Response:
         filename = make_output_filename(output_directory, audio_filename,
             'TextGrid', start_time, end_time)
         self.save_output(output, filename)
+        return filename
 
 
 def run_pipeline(audio_filename, text_filename, language, start_time=None,
