@@ -1,8 +1,9 @@
 from . import audio
-import requests
-from pathlib import Path
 from lxml import etree
+from pathlib import Path
+import requests
 from requests.exceptions import ConnectionError
+from . import text_utils
 
 
 PIPELINE_URL = 'https://clarin.phonetik.uni-muenchen.de/'
@@ -70,16 +71,17 @@ class Response:
         with open(filename, 'w') as f:
             f.write(output)
 
-    def save_alignment(self, output_directory = '', output_filename = None):
+    def save_alignment(self, output_directory = '', audio_filename = None,
+        start_time = None, end_time = None):
         output = self.download()
-        if not output_filename: output_filename = self.output_filename
-        filename = Path(output_directory) /  output_filename
+        filename = make_output_filename(output_directory, audio_filename,
+            'TextGrid', start_time, end_time)
         self.save_output(output, filename)
 
 
 def run_pipeline(audio_filename, text_filename, language, start_time=None,
     end_time=None, output_format = 'TextGrid', pipe = 'G2P_MAUS_PHO2SYL', 
-    preseg = 'true', output_symbol = 'ipa'):
+    preseg = 'true', output_symbol = 'ipa', text = None):
     ''' Run the forced alignment pipeline via the webmaus API.
     audio_filename:     path to the audio file
     text_filename:      path to the text file
@@ -91,6 +93,7 @@ def run_pipeline(audio_filename, text_filename, language, start_time=None,
                        (default: 'G2P_MAUS_PHO2SYL')
     preseg:            whether to use pre-segmentation (default: 'true')
     output_symbol:     output symbol set: 'sampa', 'ipa', 'manner', 'place'
+    text:              optional text input as string (overrides text_filename)
     '''
     if not output_symbol in ['sampa', 'ipa', 'manner', 'place']:
         raise ValueError('output_symbol must be one of: '
@@ -99,8 +102,15 @@ def run_pipeline(audio_filename, text_filename, language, start_time=None,
         signal = open(audio_filename, 'rb')
     else: signal = audio.load_partial_audio_in_bytes_buffer(
         audio_filename, start_time, end_time, format='WAV')
+    if text is not None:
+        if text_filename is not None:
+            m = f'Warning: text input provided as string, '
+            m += f'ignoring text_filename: {text_filename}'
+        fin = text_utils.string_to_bytes_buffer(text, filename=text_filename)
+    else: fin = open(text_filename, 'rb')
+        
     files = {'SIGNAL': signal,
-        'TEXT': open(text_filename, 'rb') }
+        'TEXT': fin }
     data = {'LANGUAGE': language, 'OUTFORMAT': output_format, 'PIPE': pipe,
         'PRESEG': preseg, 'OUTSYMBOL': output_symbol}
     try:
