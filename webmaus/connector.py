@@ -107,6 +107,7 @@ def run_pipeline(audio_filename, text_filename, language, start_time=None,
         if text_filename is not None:
             m = f'Warning: text input provided as string, '
             m += f'ignoring text_filename: {text_filename}'
+        else:text_filename = '.txt'
         fin = text_utils.string_to_bytes_buffer(text, filename=text_filename)
     else: fin = open(text_filename, 'rb')
         
