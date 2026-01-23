@@ -1,3 +1,6 @@
+import time
+import progressbar
+
 transcription_set= ['sampa', 'ipa', 'manner', 'place']
 
 languages = {
@@ -44,4 +47,51 @@ languages = {
     'gungabula': 'guf-AU',
     'unknown': 'und',
 }
+
+
+class LoopETA:
+    def __init__(self, total, show_progress=False):
+        self.total = total
+        self.show_progress = show_progress
+        self.eta = None
+        self._start = time.time()
+        self._bar = None
+        self._i = None
+
+        if show_progress:
+            self._bar = progressbar.ProgressBar(
+                max_value=total,
+            )
+            self._bar.start()
+
+    def update(self, i):  # i = 1..total
+        if self._bar is not None:
+            self._bar.update(i)
+        self._i = i
+        elapsed = time.time() - self._start
+        rate = elapsed / max(i, 1)
+        self.eta = rate * (self.total - i)
+
+    def finish(self):
+        if self._bar is not None:
+            self._bar.finish()
+
+    @property
+    def pretty_eta(self):
+        if self.eta is None:
+            return 'N/A'
+        return seconds_to_dd_hh_mm_ss(self.eta)
+
+    @property
+    def percentage_done(self):
+        return self._i / self.total * 100
+
+def seconds_to_dd_hh_mm_ss(seconds):
+    seconds = int(seconds)
+
+    days, seconds = divmod(seconds, 24 * 3600)
+    hours, seconds = divmod(seconds, 3600)
+    minutes, seconds = divmod(seconds, 60)
+
+    return f'{days:02d}:{hours:02d}:{minutes:02d}:{seconds:02d}'
 
