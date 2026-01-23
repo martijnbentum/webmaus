@@ -4,6 +4,7 @@ from pathlib import Path
 from progressbar import progressbar
 
 from .connector import run_pipeline, make_output_filename
+from . import utils
 
 
 class Pipeline:
@@ -35,8 +36,13 @@ class Pipeline:
         self.done = []
         self.skipped = []
         self.errors = []
+        self.infos = []
         self.executors = []
+        self.output_directories = set()
         self.wait_time = 1
+        self._stop_run = False
+        self.running = False
+        self.status_done = False
 
     def __repr__(self):
         m = f'Pipeline(language={self.language}, '
@@ -46,19 +52,59 @@ class Pipeline:
         return m
 
     def run(self):
-        for entry in progressbar(self.files):
+        self._stop_run = False
+        self.running = True
+        self.status_done = False
+        self.run_thread = threading.Thread(target=self._run)
+        self.run_thread.start()
+
+    def stop(self):
+        self._stop_run = True
+        self.running = False
+
+    @property
+    def eta_seconds(self):
+        return self.tracker.pretty_eta()
+        
+    @property
+    def eta(self):
+        t = f'ETA: {self.tracker.pretty_eta}\n'
+        t += f'working executors: {len(self.executors)}\n'
+        t += f'files done: {len(self.done)}\n'
+        t += f'files skipped: {len(self.skipped)}\n'
+        t += f'errors: {len(self.errors)}\n'
+        t += f'at file number: {self.tracker._i} of {self.tracker.total}\n'
+        t += f'percentage done: {self.tracker.percentage_done:.2f}%\n'
+        t += f'running: {self.running}\n'
+        t += f'status done: {self.status_done}\n'
+        print(t)
+
+    def _run(self, show_progress = False):
+        self.tracker = utils.LoopETA(total=len(self.files), 
+            show_progress=show_progress)
+        for index, entry in enumerate(self.files):
+            self.tracker.update(index + 1)
+            if self._stop_run: 
+                print("Work interrupted by user, started jobs will complete.")
+                break
             audio_filename = entry['audio_filename']
             text_filename = entry.get('text_filename', None)
             start_time = entry.get('start_time', None)
             end_time = entry.get('end_time', None)
             text = entry.get('text', None)
-
-            output_file = make_output_filename(self.output_directory,
+            output_directory = entry.get('output_directory', None)
+            if output_directory is None:
+                output_directory = self.output_directory
+            self.output_directories.add(output_directory)
+            
+            output_file = make_output_filename(output_directory,
                 audio_filename, self.output_format, start_time, end_time)
 
             if Path(output_file).exists() and not self.overwrite:
                 self.skipped.append((audio_filename, start_time, end_time,
                     str(output_file)))
+                self.infos.append(make_info(audio_filename, start_time,
+                    end_time, str(output_file), 'skipped'))
                 continue
 
             ok = self._throttle()
@@ -68,12 +114,10 @@ class Pipeline:
 
             thread = threading.Thread(target=self._run_single,
                 args=(audio_filename, text_filename, start_time, end_time,
-                    text))
+                    text, output_directory))
             thread.start()
             self.executors.append(thread)
             time.sleep(self.wait_time)
-            if len(self.executors) > 0:
-                print(f'n executors: {len(self.executors)}')
         print("Waiting for all threads to complete...")
         while len(self.executors) > 0:
             time.sleep(self.wait_time)
@@ -81,35 +125,21 @@ class Pipeline:
             if not ok:
                 print("Work interrupted due to thread pool restart.")
                 break
-        print("All audio files processed.")
+
+        if index + 1 == self.tracker.total:
+            self.status_done = True
+        print("audio files processed.")
         m = f'Done: {len(self.done)}, '
         m += f'Skipped: {len(self.skipped)}, '
         m += f'Errors: {len(self.errors)}'
-        m += f'\nFiles can be found in : {self.output_directory}'
+        m += f'\nFiles can be found in : {self.output_directories}'
+        m += f'\nfiles processed: {index + 1} of {self.tracker.total}'
+        m += f'\nstatus done: {self.status_done}'
         print(m)
-        self._make_infos()
-
-    def _make_infos(self):
-        infos = []
-        for name in ['skipped', 'done', 'errors']:
-            items = getattr(self, name)
-            for line in items:
-                if name == 'errors':
-                    audio_filename, start_time, end_time = line
-                    output_file = None
-                else:
-                    audio_filename, start_time, end_time, output_file = line
-                infos.append({
-                    'audio_filename': audio_filename,
-                    'start_time': start_time,
-                    'end_time': end_time,
-                    'output_file': output_file,
-                    'status': name,
-                })
-        self.infos = infos 
+        self.running = False
 
     def _run_single(self, audio_filename, text_filename, start_time = None, 
-        end_time = None, text=None):
+        end_time = None, text=None, output_directory = None):
         '''Run the forced alignment pipeline for a single audio-text pair.
         audio_filename:     path to the audio file
         text_filename:      path to the text file
@@ -132,17 +162,20 @@ class Pipeline:
             text=text,
         )
 
-        if response is None:
+        if response is None or not response.success:
             self.errors.append((audio_filename, start_time, end_time))
-            return
-        if not response.success:
-            self.errors.append((audio_filename, start_time, end_time))
+            self.infos.append(make_info(audio_filename, start_time, end_time,
+                None, 'error'))
             return
 
-        f = response.save_alignment(output_directory = self.output_directory,
+        if output_directory is None:
+            output_directory = self.output_directory
+        f = response.save_alignment(output_directory = output_directory,
             audio_filename = audio_filename, start_time = start_time,
             end_time = end_time)
         self.done.append((audio_filename, start_time, end_time, f))
+        self.infos.append(make_info(audio_filename, start_time, end_time,
+            f, 'done'))
 
     def _throttle(self):
         '''Throttle the number of concurrent threads to avoid overloading 
@@ -169,5 +202,42 @@ class Pipeline:
             self.run()
             return False
         return True
+
+
+    @property
+    def done_infos(self):
+        infos = [info for info in self.infos if info['status'] == 'done']
+        return infos 
+
+    @property
+    def error_infos(self):
+        infos = [info for info in self.infos if info['status'] == 'error']
+        return infos
+
+    @property
+    def skipped_infos(self):
+        infos = [info for info in self.infos if info['status'] == 'skipped']
+        return infos
+        
+
+
+
+    
             
+
+def make_info(audio_filename, start_time, end_time, output_file, status):
+    info = {
+        'audio_filename': audio_filename,
+        'start_time': start_time,
+        'end_time': end_time,
+        'output_file': output_file,
+        'status': status,
+        'timestamp': readable_timestamp(),
+        'time': time.time(),
+        }
+    return info
+
+def readable_timestamp():
+    return time.strftime('%a %d %b %Y, %H:%M', time.localtime())
+
 
