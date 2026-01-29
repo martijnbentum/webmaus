@@ -3,7 +3,7 @@ from pathlib import Path
 import soundfile as sf
 
 def load_partial_audio_in_bytes_buffer(filename, start_time=0.0, end_time=None, 
-    format='WAV'):
+    format='WAV', verbose=False):
     '''Load a portion of an audio file into an in-memory bytes buffer.
     filename:           path to the audio file
     start_time:        start time in seconds to load from
@@ -14,10 +14,10 @@ def load_partial_audio_in_bytes_buffer(filename, start_time=0.0, end_time=None,
     buffer = audio_to_buffer(signal, sample_rate, format=format)
     name = Path(filename).name
     buffer.name = name
-    print('Created in-memory audio buffer')
+    if verbose: print('Created in-memory audio buffer')
     return buffer
 
-def load_audio(filename, start_time=0.0, end_time=None):
+def load_audio(filename, start_time=0.0, end_time=None, verbose=False):
     '''Load an audio file and return the audio data and sample rate.
     filename:           path to the audio file
     start_time:        start time in seconds to load from
@@ -27,7 +27,7 @@ def load_audio(filename, start_time=0.0, end_time=None):
     '''
     m = f'Loading audio from {filename}, start_time={start_time}, '
     m += f'end_time={end_time}'
-    print(m)
+    if verbose: print(m)
     sample_rate = None
     signal = None
     with sf.SoundFile(filename) as f:
