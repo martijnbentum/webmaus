@@ -74,6 +74,8 @@ class Response:
     def save_alignment(self, output_directory = '', audio_filename = None,
         start_time = None, end_time = None):
         output = self.download()
+        if output_directory:
+            Path(output_directory).mkdir(parents=True, exist_ok=True)
         filename = make_output_filename(output_directory, audio_filename,
             'TextGrid', start_time, end_time)
         self.save_output(output, filename)
