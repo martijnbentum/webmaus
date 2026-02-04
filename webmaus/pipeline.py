@@ -37,6 +37,7 @@ class Pipeline:
         self.skipped = []
         self.errors = []
         self.infos = []
+        self._max_concurrent_executors = 9
         self.executors = []
         self.output_directories = set()
         self.wait_time = 1
@@ -188,7 +189,7 @@ class Pipeline:
         self.executors = [e for e in self.executors if e.is_alive()]
         self.start = time.time()
         do_restart = False
-        while len(self.executors) > 6:
+        while len(self.executors) >= self._max_concurrent_executors:
             time.sleep(1)
             self.executors = [e for e in self.executors if e.is_alive()]
             if time.time() - self.start > 1200:
