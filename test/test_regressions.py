@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from webmaus.connector import Response, _main
 from webmaus.pipeline import Pipeline
-from webmaus.simple import DEFAULT_LANGUAGE, align_text, align_texts
+from webmaus.simple_align import DEFAULT_LANGUAGE, align_text, align_texts
 
 
 class DummyHTTPResponse:
@@ -109,7 +109,8 @@ class SimpleAlignmentTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_filename = Path(tmpdir) / 'result.TextGrid'
-            with patch('webmaus.simple.run_pipeline', return_value=response) as run:
+            with patch('webmaus.simple_align.run_pipeline',
+                return_value=response) as run:
                 result = align_text(
                     transcription='dit is een test',
                     audio_filename='clip.wav',
@@ -132,7 +133,8 @@ class SimpleAlignmentTests(unittest.TestCase):
         )
 
     def test_align_texts_handles_multiple_inputs(self):
-        with patch('webmaus.simple.align_text', side_effect=['a.TextGrid', 'b.TextGrid']) as align:
+        with patch('webmaus.simple_align.align_text',
+            side_effect=['a.TextGrid', 'b.TextGrid']) as align:
             result = align_texts(
                 transcriptions=['a', 'b'],
                 audio_filenames=['a.wav', 'b.wav'],
