@@ -5,10 +5,10 @@ simple utility to use webmaus in python to force align an orthographic transcrip
 ## installation
 
 ### pip
-pip install git+ssh://git@github.com/martijnbentum/webmaus.git
+pip install git+https://git@github.com/martijnbentum/webmaus.git
 
 ### uv pip
-uv pip install git+ssh://git@github.com/martijnbentum/webmaus.git
+uv pip install git+https://git@github.com/martijnbentum/webmaus.git
 
 ## usage
 ```python
