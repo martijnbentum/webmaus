@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from webmaus.connector import Response, _main
 from webmaus.pipeline import Pipeline
+from webmaus.simple import DEFAULT_LANGUAGE, align_text, align_texts
 
 
 class DummyHTTPResponse:
@@ -98,6 +99,57 @@ class CLITests(unittest.TestCase):
 
         self.assertEqual(result, 'ok')
         handle.assert_called_once()
+
+
+class SimpleAlignmentTests(unittest.TestCase):
+    def test_align_text_uses_dutch_default_and_writes_requested_file(self):
+        response = unittest.mock.Mock()
+        response.success = True
+        response.download.return_value = 'alignment'
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_filename = Path(tmpdir) / 'result.TextGrid'
+            with patch('webmaus.simple.run_pipeline', return_value=response) as run:
+                result = align_text(
+                    transcription='dit is een test',
+                    audio_filename='clip.wav',
+                    output_filename=output_filename,
+                )
+
+        self.assertEqual(result, str(output_filename))
+        run.assert_called_once_with(
+            audio_filename='clip.wav',
+            text_filename=None,
+            language=DEFAULT_LANGUAGE,
+            output_format='TextGrid',
+            pipe='G2P_MAUS_PHO2SYL',
+            preseg='true',
+            text='dit is een test',
+        )
+        response.save_output.assert_called_once_with(
+            'alignment',
+            output_filename,
+        )
+
+    def test_align_texts_handles_multiple_inputs(self):
+        with patch('webmaus.simple.align_text', side_effect=['a.TextGrid', 'b.TextGrid']) as align:
+            result = align_texts(
+                transcriptions=['a', 'b'],
+                audio_filenames=['a.wav', 'b.wav'],
+                output_filenames=['a.TextGrid', 'b.TextGrid'],
+                language='eng-US',
+            )
+
+        self.assertEqual(result, ['a.TextGrid', 'b.TextGrid'])
+        self.assertEqual(align.call_count, 2)
+
+    def test_align_texts_validates_input_lengths(self):
+        with self.assertRaises(ValueError):
+            align_texts(
+                transcriptions=['a'],
+                audio_filenames=['a.wav', 'b.wav'],
+                output_filenames=['a.TextGrid'],
+            )
 
 
 if __name__ == '__main__':
