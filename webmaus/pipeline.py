@@ -65,7 +65,8 @@ class Pipeline:
 
     @property
     def eta_seconds(self):
-        return self.tracker.pretty_eta()
+        eta = self.tracker.eta
+        return 0 if eta is None else eta
         
     @property
     def eta(self):
@@ -83,7 +84,9 @@ class Pipeline:
     def _run(self, show_progress = False):
         self.tracker = utils.LoopETA(total=len(self.files), 
             show_progress=show_progress)
+        processed = 0
         for index, entry in enumerate(self.files):
+            processed = index + 1
             self.tracker.update(index + 1)
             if self._stop_run: 
                 print("Work interrupted by user, started jobs will complete.")
@@ -127,14 +130,14 @@ class Pipeline:
                 print("Work interrupted due to thread pool restart.")
                 break
 
-        if index + 1 == self.tracker.total:
+        if processed == self.tracker.total:
             self.status_done = True
         print("audio files processed.")
         m = f'Done: {len(self.done)}, '
         m += f'Skipped: {len(self.skipped)}, '
         m += f'Errors: {len(self.errors)}'
         m += f'\nFiles can be found in : {self.output_directories}'
-        m += f'\nfiles processed: {index + 1} of {self.tracker.total}'
+        m += f'\nfiles processed: {processed} of {self.tracker.total}'
         m += f'\nstatus done: {self.status_done}'
         print(m)
         self.running = False
@@ -173,7 +176,7 @@ class Pipeline:
             output_directory = self.output_directory
         f = response.save_alignment(output_directory = output_directory,
             audio_filename = audio_filename, start_time = start_time,
-            end_time = end_time)
+            end_time = end_time, output_format = self.output_format)
         self.done.append((audio_filename, start_time, end_time, f))
         self.infos.append(make_info(audio_filename, start_time, end_time,
             f, 'done'))
@@ -240,5 +243,3 @@ def make_info(audio_filename, start_time, end_time, output_file, status):
 
 def readable_timestamp():
     return time.strftime('%a %d %b %Y, %H:%M', time.localtime())
-
-

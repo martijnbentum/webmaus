@@ -84,6 +84,8 @@ class LoopETA:
 
     @property
     def percentage_done(self):
+        if self._i is None or self.total == 0:
+            return 0
         return self._i / self.total * 100
 
 def seconds_to_dd_hh_mm_ss(seconds):
@@ -94,4 +96,3 @@ def seconds_to_dd_hh_mm_ss(seconds):
     minutes, seconds = divmod(seconds, 60)
 
     return f'{days:02d}:{hours:02d}:{minutes:02d}:{seconds:02d}'
-

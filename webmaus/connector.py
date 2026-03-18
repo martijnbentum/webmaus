@@ -1,4 +1,5 @@
 from . import audio
+import argparse
 from lxml import etree
 from pathlib import Path
 import requests
@@ -17,13 +18,15 @@ class Response:
         '''
         self.response = response
         self.content = response.content.decode()
-        if self.content in ['0', '1', '2']:
-            self._handle_load_indicator_response()
+        self.type = 'unknown'
         self.success = False
         self.download_link = None
+        self.output_filename = None
         self.output = None
         self.warnings = None
-        if 'downloadLink' in self.content:
+        if self.content in ['0', '1', '2']:
+            self._handle_load_indicator_response()
+        elif self.content.lstrip().startswith('<'):
             self._handle_pipeline_response()
 
     def __repr__(self):
@@ -32,7 +35,8 @@ class Response:
             m += ' | load: ' + str(self.load)
         if self.type == 'pipeline':
             m += ' | success: ' + str(self.success)
-            m += ' | output_filename: ' + self.output_filename
+            if self.output_filename:
+                m += ' | output_filename: ' + self.output_filename
         return m
 
     def _handle_load_indicator_response(self):
@@ -42,19 +46,23 @@ class Response:
     def _handle_pipeline_response(self):
         self.type = 'pipeline'
         self.xml = etree.fromstring(self.content.encode())
-        self.success = self.xml.find('success').text == 'true'
-        self.download_link = self.xml.find('downloadLink').text
+        success = self.xml.find('success')
+        self.success = success is not None and success.text == 'true'
+        download_link = self.xml.find('downloadLink')
+        self.download_link = None if download_link is None else download_link.text
         if self.download_link:
             self.output_filename = Path(self.download_link).name
-        self.output = self.xml.find('output').text
-        self.warnings = self.xml.find('warnings').text
+        output = self.xml.find('output')
+        warnings = self.xml.find('warnings')
+        self.output = None if output is None else output.text
+        self.warnings = None if warnings is None else warnings.text
 
     def download(self):
         if hasattr(self,'download_output'):
             return self.download_output
         self.download_output = None
         self.download_connection_ok = None
-        if self.success and self.type == 'pipeline':
+        if self.success and self.type == 'pipeline' and self.download_link:
             try:
                 self.download_response = requests.get(self.download_link)
                 self.download_output = self.download_response.content.decode()
@@ -72,12 +80,12 @@ class Response:
             f.write(output)
 
     def save_alignment(self, output_directory = '', audio_filename = None,
-        start_time = None, end_time = None):
+        start_time = None, end_time = None, output_format = 'TextGrid'):
         output = self.download()
         if output_directory:
             Path(output_directory).mkdir(parents=True, exist_ok=True)
         filename = make_output_filename(output_directory, audio_filename,
-            'TextGrid', start_time, end_time)
+            output_format, start_time, end_time)
         self.save_output(output, filename)
         return filename
 
@@ -184,7 +192,7 @@ def _handle_pipeline_run(args):
     if response != None and response.success: 
         output = response.download()
         if output:
-            save_output(output, output_filename)
+            response.save_output(output, output_filename)
             print('saved:', output_filename)
         else: print('download error')
     else: print('response error')
